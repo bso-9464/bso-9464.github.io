@@ -199,6 +199,41 @@ if has ss; then
   done
 fi
 
+sep "系统健康状态排查"
+echo "--- 是否有失败的 systemd 服务 ---"
+systemctl --failed 2>/dev/null
+echo; echo "--- 是否需要重启 ---"
+[ -f /var/run/reboot-required ] && cat /var/run/reboot-required || echo "无需重启"
+echo; echo "--- journal 日志磁盘占用 ---"
+journalctl --disk-usage 2>/dev/null
+echo; echo "--- 最近 20 条 error 级别及以上日志 ---"
+journalctl -p err -b --no-pager 2>/dev/null | tail -n 20
+
+sep "网络连接与路由（辅助判断是否有异常外连）"
+echo "--- 路由表 ---"
+ip route 2>/dev/null
+echo; echo "--- /etc/hosts ---"
+cat /etc/hosts 2>/dev/null
+echo; echo "--- 已建立的出站/入站连接（按远程地址） ---"
+if has ss; then ss -tnp state established 2>/dev/null; fi
+
+sep "软件源与密钥（第三方源排查，安全相关）"
+echo "--- apt 软件源列表 ---"
+[ -f /etc/apt/sources.list ] && cat /etc/apt/sources.list
+ls /etc/apt/sources.list.d/*.list /etc/apt/sources.list.d/*.sources 2>/dev/null | while read -r f; do
+  echo "--- $f ---"; cat "$f" 2>/dev/null
+done
+echo; echo "--- 第三方 apt GPG 公钥 ---"
+ls -la /etc/apt/trusted.gpg.d/ 2>/dev/null | grep -v '^total\|^d'
+ls -la /etc/apt/keyrings/ 2>/dev/null | grep -v '^total\|^d'
+
+sep "证书与其他常驻服务痕迹"
+[ -d /etc/letsencrypt/live ] && { echo "--- Let's Encrypt 证书 ---"; ls /etc/letsencrypt/live 2>/dev/null; }
+has acme.sh && echo "检测到 acme.sh"
+[ -d "$HOME/.acme.sh" ] && echo "发现 ~/.acme.sh 目录（可能用acme.sh管理证书）"
+echo; echo "--- 磁盘上找到的 docker-compose 文件（非docker容器方式部署的项目痕迹）---"
+find / -xdev -maxdepth 5 \( -name "docker-compose.yml" -o -name "docker-compose.yaml" -o -name "compose.yml" -o -name "compose.yaml" \) 2>/dev/null
+
 sep "常用运行时/语言环境"
 for c in python3 python node npm git curl wget nginx caddy; do
   has "$c" && echo "$c: $("$c" --version 2>&1 | head -n1)"
