@@ -125,6 +125,39 @@ else
   echo "未检测到 docker 命令"
 fi
 
+sep "已安装软件包 / 卸载参考"
+if has dpkg; then
+  echo "已安装 deb 包总数: $(dpkg -l 2>/dev/null | grep -c '^ii')"
+  echo; echo "--- 手动安装的包 (apt-mark showmanual，排除系统自带) ---"
+  apt-mark showmanual 2>/dev/null | sort
+  echo; echo "--- 占用磁盘最大的 20 个已安装包 ---"
+  dpkg-query -Wf '${Installed-Size}\t${Package}\n' 2>/dev/null | sort -rn | head -n 20 | awk '{printf "%.1fMB\t%s\n", $1/1024, $2}'
+  echo; echo "--- 残留配置的包 (已卸载但配置文件还在, dpkg状态rc) ---"
+  dpkg -l 2>/dev/null | awk '/^rc/ {print $2}'
+  echo; echo "--- 最近 apt 安装/卸载记录 (最后20条) ---"
+  [ -f /var/log/apt/history.log ] && grep -E "^(Start-Date|Commandline)" /var/log/apt/history.log 2>/dev/null | tail -n 20
+fi
+has snap && { echo; echo "--- snap 包列表 ---"; snap list 2>/dev/null; }
+has pip3 && { echo; echo "--- pip3 全局安装的包 ---"; pip3 list --format=freeze 2>/dev/null | grep -v "^$"; }
+has npm && { echo; echo "--- npm 全局安装的包 ---"; npm list -g --depth=0 2>/dev/null; }
+
+sep "Docker 详细占用与可清理项"
+if has docker; then
+  echo "--- docker system df -v (逐项体积明细) ---"
+  docker system df -v 2>/dev/null
+  echo; echo "--- 悬空(dangling)镜像 ---"
+  docker images -f dangling=true 2>/dev/null
+  echo; echo "--- 已停止的容器 ---"
+  docker ps -a -f status=exited 2>/dev/null
+  echo; echo "--- 未被容器使用的数据卷 ---"
+  docker volume ls -f dangling=true 2>/dev/null
+  echo; echo "--- 未被使用的自定义网络 ---"
+  docker network ls --filter type=custom 2>/dev/null
+fi
+
+sep "目录磁盘占用 Top（辅助定位卸载后残留大文件）"
+du -sh /opt/* /usr/local/* /srv/* /var/lib/docker/volumes/* 2>/dev/null | sort -rh | head -n 15
+
 sep "常用运行时/语言环境"
 for c in python3 python node npm git curl wget nginx caddy; do
   has "$c" && echo "$c: $("$c" --version 2>&1 | head -n1)"
