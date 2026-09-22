@@ -158,6 +158,47 @@ fi
 sep "目录磁盘占用 Top（辅助定位卸载后残留大文件）"
 du -sh /opt/* /usr/local/* /srv/* /var/lib/docker/volumes/* 2>/dev/null | sort -rh | head -n 15
 
+sep "非常规方式安装的软件排查（非apt/非docker）"
+echo "--- /usr/local/bin 和 /usr/local/sbin 下的自定义程序 ---"
+ls -la /usr/local/bin /usr/local/sbin 2>/dev/null | grep -v '^total\|^d'
+echo; echo "--- ~/.local/bin (用户级安装) ---"
+ls -la ~/.local/bin 2>/dev/null | grep -v '^total\|^d'
+echo; echo "--- 最近30天内新增/修改的可执行文件 (常见于 curl|bash 一键安装脚本) ---"
+find /usr/bin /usr/local/bin /usr/local/sbin /opt /root -maxdepth 3 -type f -mtime -30 2>/dev/null | grep -v -E '^/usr/bin/(python|perl)' | head -n 30
+echo; echo "--- 其他语言/生态的包管理器 ---"
+for c in cargo go gem pipx flatpak yarn pnpm composer; do
+  has "$c" && echo "检测到: $c ($($c --version 2>&1 | head -n1))"
+done
+has flatpak && { echo "--- flatpak 已安装应用 ---"; flatpak list 2>/dev/null; }
+has go && [ -d "$HOME/go/bin" ] && { echo "--- go install 安装的程序 ---"; ls "$HOME/go/bin" 2>/dev/null; }
+has gem && { echo "--- gem 全局安装 ---"; gem list --local 2>/dev/null | head -n 20; }
+
+sep "自定义/非标准开机启动与后台任务"
+[ -f /etc/rc.local ] && { echo "--- /etc/rc.local ---"; cat /etc/rc.local; }
+echo; echo "--- /etc/systemd/system 下自定义 service/timer（非系统默认路径）---"
+ls -la /etc/systemd/system/*.service /etc/systemd/system/*.timer 2>/dev/null
+echo; echo "--- systemd timer 列表（定时任务的另一种形式，比cron更常被脚本使用）---"
+has systemctl && systemctl list-timers --all 2>/dev/null | head -n 20
+echo; echo "--- 所有用户的 crontab ---"
+for u in $(cut -f1 -d: /etc/passwd); do
+  ct=$(crontab -l -u "$u" 2>/dev/null)
+  [ -n "$ct" ] && { echo "用户 $u:"; echo "$ct"; }
+done
+echo; echo "--- /etc/cron.daily /weekly /monthly 里的自定义脚本 ---"
+ls -la /etc/cron.daily /etc/cron.weekly /etc/cron.monthly 2>/dev/null | grep -v '^total\|^d'
+
+sep "异常权限文件排查（安全相关，可选关注）"
+echo "--- SUID/SGID 可执行文件（非系统标准路径下的，更值得留意）---"
+find /usr/local /opt /root /home -xdev -type f \( -perm -4000 -o -perm -2000 \) 2>/dev/null
+
+sep "监听端口对应的完整进程路径"
+if has ss; then
+  for pid in $(ss -tulnp 2>/dev/null | grep -oP 'pid=\K[0-9]+' | sort -u); do
+    path=$(readlink -f /proc/"$pid"/exe 2>/dev/null)
+    [ -n "$path" ] && echo "PID $pid -> $path"
+  done
+fi
+
 sep "常用运行时/语言环境"
 for c in python3 python node npm git curl wget nginx caddy; do
   has "$c" && echo "$c: $("$c" --version 2>&1 | head -n1)"
