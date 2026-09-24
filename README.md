@@ -7,3 +7,5 @@ curl -fsSL -o install-clewdr.sh https://bso-9464.github.io/install-clewdr.sh && 
 curl -fsSL -o vps-status.sh https://bso-9464.github.io/vps-status.sh && bash vps-status.sh
 
 curl -fsSL https://bso-9464.github.io/vps-info.sh | bash
+
+curl -fsSL https://bso-9464.github.io/install-komari.sh | bash
