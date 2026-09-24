@@ -124,18 +124,24 @@ log "Downloading: $ASSET_URL"
 
 TMP_DIR=$(mktemp -d)
 cd "$TMP_DIR"
-curl -fsSL -o typecho_pkg "$ASSET_URL"
+ASSET_NAME=$(basename "$ASSET_URL")
+curl -fsSL -o "$ASSET_NAME" "$ASSET_URL"
 
-if file typecho_pkg | grep -qi zip; then
-  unzip -q typecho_pkg -d extracted
+mkdir -p extracted
+if [[ "$ASSET_NAME" == *.zip ]]; then
+  unzip -q "$ASSET_NAME" -d extracted
 else
-  mkdir -p extracted
-  tar -xzf typecho_pkg -C extracted
+  tar -xzf "$ASSET_NAME" -C extracted
 fi
 
-# The release tarball unpacks to ./build ; the source tarball unpacks to typecho-<ver>/
-SRC_DIR=$(find extracted -maxdepth 1 -type d -iname 'build' -o -maxdepth 1 -type d -iname 'typecho-*' | head -n1)
-[[ -z "$SRC_DIR" ]] && SRC_DIR=$(find extracted -mindepth 1 -maxdepth 1 -type d | head -n1)
+# typecho.zip extracts flat (index.php, admin/, usr/ etc. directly under extracted/).
+# The source tarball fallback unpacks to a single typecho-<ver>/ subfolder instead.
+if [[ -f extracted/index.php ]]; then
+  SRC_DIR="extracted"
+else
+  SRC_DIR=$(find extracted -mindepth 1 -maxdepth 1 -type d \( -iname 'build' -o -iname 'typecho-*' \) | head -n1)
+  [[ -z "$SRC_DIR" ]] && SRC_DIR=$(find extracted -mindepth 1 -maxdepth 1 -type d | head -n1)
+fi
 
 log "Installing to $WEBROOT"
 mkdir -p "$WEBROOT"
